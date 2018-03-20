@@ -1,5 +1,7 @@
-import UXStore from './UXStore';
+import NavigationStore from './NavigationStore';
+import AuthenticationStore from './AuthenticationStore';
 
 export {
-  UXStore
+  NavigationStore,
+  AuthenticationStore
 };
