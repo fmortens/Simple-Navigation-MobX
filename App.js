@@ -5,7 +5,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-  SafeAreaView
+  TextInput,
+  SafeAreaView,
+  Button
 } from 'react-native';
 
 import {
@@ -15,114 +17,118 @@ import {
   NavigationActions
 } from 'react-navigation';
 
-import { observer } from 'mobx-react';
+import {
+  Provider,
+  observer,
+  inject,
+  toJS
+} from 'mobx-react';
 
 import {
-  UXStore
+  NavigationStore,
+  AuthenticationStore
 } from './app/stores';
 
-class Search extends Component {
-  updateHome = params => {
-    const { state, dispatch, goBack } = this.props.navigation;
-    dispatch(
-      NavigationActions.setParams({
-        params,
-        key: state.params.parentKey
-      })
-    );
-
-    goBack(null);
-  };
-
+@inject('authenticationStore')
+@observer
+class Main extends Component {
   render() {
+    const {
+      authenticationStore
+    } = this.props;
+
     return (
       <View style={styles.container}>
-        <Text>Search screen</Text>
-
-        <TouchableOpacity
-          onPress={() => this.updateHome({ search: 'Cats', title: 'Cats' })}
-        >
-          <Text>Search for Cats</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => this.updateHome({ search: 'Dogs', title: 'Dogs' })}
-        >
-          <Text>Search for Dogs</Text>
-        </TouchableOpacity>
+        <Text>Main screen</Text>
+        <Button title="Log out" onPress={authenticationStore.logout} />
       </View>
     );
   }
 }
 
-class Index extends Component {
-  render() {
-    const { navigate, setParams, state } = this.props.navigation;
-    return (
-      <View style={styles.container}>
-        <Text>Index screen</Text>
-        <TouchableOpacity
-          onPress={() =>
-            navigate('Search', { title: 'Search', parentKey: state.key })
-          }
-        >
-          <Text>Go to Search</Text>
-        </TouchableOpacity>
-        <Text>
-          {state.params &&
-            state.params.search &&
-            `Searched for ${state.params.search}`}
-        </Text>
-      </View>
-    );
-  }
-}
 
+@inject('authenticationStore')
+@observer
 class Login extends Component {
-  componentDidMount() {
-    const { navigation: { dispatch } } = this.props;
+  constructor(props) {
+    super(props);
 
-    /* ... add your own login logic here ... */
-
-    let opt = {
-      index: 0,
-      actions: [
-        NavigationActions.navigate({
-          routeName: 'App',
-          params: { title: 'Index' }
-        })
-      ]
+    this.state = {
+      email: null,
+      password: null
     };
 
-    // redirect to the main application
-    //dispatch(NavigationActions.reset(opt));
+    this.authenticate = this.authenticate.bind(this);
+  }
+
+  componentDidMount() {
+    const {
+      navigation: { dispatch },
+      authenticationStore,
+    } = this.props;
+  }
+
+  authenticate() {
+    const {
+      authenticationStore
+    } = this.props;
+
+    const {
+      email,
+      password
+    } = this.state;
+
+    if (email && password) {
+      authenticationStore.login({
+        email,
+        password
+      });
+    }
   }
 
   render() {
+    const {
+      authenticationStore
+    } = this.props;
+
+    const errorMessage = authenticationStore.status === 'error' ? 'Login failed' : '';
+
+    let content = <Text>Busy</Text>;
+
+    if (authenticationStore.status !== 'busy') {
+      content = (
+        <View>
+        <Text style={styles.errorMessage}>{errorMessage}</Text>
+        <TextInput
+          style={styles.inputField}
+          value={this.state.email}
+          autoCorrect={false}
+          onChangeText={
+            (text) => this.setState({email: text.toLocaleLowerCase()})
+          } />
+        <TextInput
+          style={styles.inputField}
+          value={this.state.password}
+          autoCorrect={false}
+          secureTextEntry={true}
+          onChangeText={
+            (text) => this.setState({password: text.toLocaleLowerCase()})
+          } />
+        <Button title="Log in" onPress={this.authenticate} />
+        </View>
+      );
+    }
+
     return (
-      <SafeAreaView>
-        <Text>Login</Text>
-      </SafeAreaView>
+      <SafeAreaView style={styles.loginView}>{content}</SafeAreaView>
     );
   }
 }
-
-const AppNavigator = StackNavigator(
-  {
-    Index: { screen: Index },
-    Search: { screen: Search }
-  },
-  {
-    initialRouteName: 'Index',
-    navigationOptions: ({ navigation: { state } }) => ({
-      title: state.params && state.params.title
-    })
-  }
-);
 
 const RootNavigator = StackNavigator(
   {
     Login: { screen: Login },
-    App: { screen: AppNavigator }
+    Main: { screen: Main }
   },
   {
     headerMode: 'none'
@@ -133,26 +139,41 @@ const RootNavigator = StackNavigator(
 class App extends Component {
   constructor(props, context) {
     super(props, context);
-    this.store = new UXStore({navigator: RootNavigator});
+
+    // Set up the stores,
+    // navigation is hooked into nav
+    this.navigationStore = new NavigationStore({navigator: RootNavigator});
+
+    // Then the provided stores
+    this.stores = {
+      authenticationStore: new AuthenticationStore({
+        navigationStore: this.navigationStore
+      })
+    }
   }
 
   render() {
     return (
-      <RootNavigator
-        navigation={addNavigationHelpers({
-          dispatch: this.store.dispatch,
-          state: this.store.navigationState,
-          addListener: () => {
-            /* left empty intentionally */
-          }
-        })}
-      />
+      <Provider {...this.stores}>
+        <RootNavigator
+          navigation={addNavigationHelpers({
+            dispatch: this.navigationStore.dispatch,
+            state: this.navigationStore.navigationState,
+            addListener: () => {
+              /* left empty intentionally */
+            }
+          })}
+        />
+      </Provider>
     );
   }
 }
 
 const colors = {
-  white: '#fff'
+  white: '#fff',
+  grayish: '#fafafa',
+  red: '#f00',
+  transparentBlack: 'rgba(0,0,0,0.3)'
 };
 
 const styles = StyleSheet.create({
@@ -161,6 +182,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  loginView: {
+    flex: 1,
+    flexDirection: 'column',
+    backgroundColor: colors.grayish,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputField: {
+    height: 50,
+    width: 300,
+    margin: 10,
+    padding: 10,
+    borderWidth: 2,
+    borderColor: colors.transparentBlack,
+    backgroundColor: colors.white,
+    borderRadius: 10
+  },
+  errorMessage: {
+    color: colors.red
   }
 });
 
