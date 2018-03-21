@@ -29,6 +29,10 @@ import {
   AuthenticationStore
 } from './app/stores';
 
+import {
+  BusyIndicator
+} from './app/components';
+
 @inject('authenticationStore')
 @observer
 class Main extends Component {
@@ -93,7 +97,7 @@ class Login extends Component {
 
     const errorMessage = authenticationStore.status === 'error' ? 'Login failed' : '';
 
-    let content = <Text>Busy</Text>;
+    let content = <BusyIndicator />;
 
     if (authenticationStore.status !== 'busy') {
       content = (
